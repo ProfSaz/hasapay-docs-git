@@ -1,6 +1,6 @@
 # Authentication
 
-HasaPay uses two authentication methods depending on the API endpoint. Understanding when to use each is crucial for successful integration.
+HasaPay uses two authentication methods depending on the API endpoint.
 
 ---
 
@@ -8,20 +8,16 @@ HasaPay uses two authentication methods depending on the API endpoint. Understan
 
 | Method | Used For | Security Level |
 |--------|----------|----------------|
-| **JWT (Bearer Token)** | Dashboard operations, user/team management, webhooks, API keys | Standard |
-| **HMAC (Signature)** | Wallet operations, transactions, addresses, balances | High Security |
-
-> 💡 **Why two methods?** HMAC provides extra security for sensitive financial operations by ensuring request integrity and preventing replay attacks.
+| **JWT (Bearer Token)** | Dashboard operations, user/team management, settings, API keys | Standard |
+| **HMAC (Signature)** | Wallet operations, transactions, addresses, assets, webhooks | High Security |
 
 ---
 
 ## JWT Authentication
 
-JWT (JSON Web Token) authentication is used for user-related operations.
+### Login
 
-### Getting a JWT Token
-
-```bash
+```
 POST /api/v1/auth/login
 ```
 
@@ -33,13 +29,12 @@ POST /api/v1/auth/login
 }
 ```
 
-**Response:**
+**Response (Single Organization):**
 ```json
 {
   "success": true,
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expires_at": "2024-04-17T10:00:00Z",
+    "token": "eyJhbGciOiJIUzI1NiIs...",
     "user": {
       "id": "user_123",
       "email": "you@company.com",
@@ -53,370 +48,357 @@ POST /api/v1/auth/login
 }
 ```
 
+**Response (Multiple Organizations):**
+```json
+{
+  "success": true,
+  "data": {
+    "requires_org_selection": true,
+    "session_token": "sess_abc123...",
+    "organizations": [
+      {"id": "org_1", "name": "Company A"},
+      {"id": "org_2", "name": "Company B"}
+    ]
+  }
+}
+```
+
+### Select Organization (Multi-Org Users)
+
+Only required when user belongs to multiple organizations.
+
+```
+POST /api/v1/auth/select-org
+```
+
+**Request:**
+```json
+{
+  "session_token": "sess_abc123...",
+  "organization_id": "org_1"
+}
+```
+
 ### Using the JWT Token
 
 Include the token in the `Authorization` header:
 
 ```bash
 curl -X GET https://apitest.hasapay.com/api/v1/team/me \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
 ```
 
-### JWT Endpoints
+---
 
-These endpoints use JWT authentication:
+## Registration Flow
 
-| Category | Endpoints |
-|----------|-----------|
-| Auth | `/auth/login`, `/auth/register`, `/auth/verify-email` |
-| Team | `/team/me`, `/team/members`, `/team/invite` |
-| Settings | `/settings/organization` |
-| Webhooks | `/webhooks`, `/webhooks/:id` |
-| API Keys | `/api-keys`, `/api-keys/:id` |
-| Assets | `/assets`, `/assets/enable`, `/assets/supported` |
+### 1. Register Organization
 
-### Token Expiry
+```
+POST /api/v1/auth/register
+```
 
-- Tokens expire after **24 hours**
-- When expired, you'll receive a `401 Unauthorized` response
-- Simply login again to get a new token
+**Request:**
+```json
+{
+  "name": "John Doe",
+  "email": "john@yourcompany.com",
+  "password": "SecurePass123!",
+  "business_name": "Your Company Inc",
+  "website": "https://yourcompany.com",
+  "incorporation_country": "US",
+  "industry": "fintech"
+}
+```
+
+### 2. Verify Email
+
+```
+POST /api/v1/auth/verify-email
+```
+
+**Request:**
+```json
+{
+  "organization_id": "org_456",
+  "code": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "testnet_api_key": {
+      "api_key": "hpk_test_abc123...",
+      "secret_key": "hps_test_xyz789..."
+    }
+  }
+}
+```
+
+> ⚠️ **Important:** Save the `secret_key` immediately - it's only shown once!
+
+### 3. Resend Verification Code
+
+```
+POST /api/v1/auth/resend-code
+```
+
+**Request:**
+```json
+{
+  "organization_id": "org_456",
+  "email": "john@yourcompany.com"
+}
+```
+
+---
+
+## Password Reset Flow
+
+### 1. Request Password Reset
+
+```
+POST /api/v1/auth/forgot-password
+```
+
+**Request:**
+```json
+{
+  "email": "john@yourcompany.com"
+}
+```
+
+### 2. Validate Reset Token
+
+```
+GET /api/v1/auth/reset-password/:token
+```
+
+### 3. Reset Password
+
+```
+POST /api/v1/auth/reset-password/:token
+```
+
+**Request:**
+```json
+{
+  "password": "NewSecurePass123!"
+}
+```
+
+---
+
+## Organization Management
+
+### Get My Organizations
+
+```
+GET /api/v1/auth/my-organizations
+```
+
+**Headers:** `Authorization: Bearer {{TOKEN}}`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "organizations": [
+      {"id": "org_1", "name": "Company A", "role": "admin"},
+      {"id": "org_2", "name": "Company B", "role": "member"}
+    ]
+  }
+}
+```
+
+### Switch Organization
+
+```
+POST /api/v1/auth/switch-org
+```
+
+**Headers:** `Authorization: Bearer {{TOKEN}}`
+
+**Request:**
+```json
+{
+  "organization_id": "org_2"
+}
+```
+
+---
+
+## Invite Flow
+
+### Get Invite Details (Public)
+
+```
+GET /api/v1/auth/invite/:token
+```
+
+### Accept Invite (New User)
+
+```
+POST /api/v1/auth/invite/:token/accept
+```
+
+**Request:**
+```json
+{
+  "password": "SecurePass123!"
+}
+```
+
+### Accept Invite (Existing User)
+
+```
+POST /api/v1/auth/invite/:token/accept-existing
+```
+
+**Headers:** `Authorization: Bearer {{TOKEN}}`
+
+### Decline Invite
+
+```
+POST /api/v1/auth/invite/:token/decline
+```
+
+**Headers:** `Authorization: Bearer {{TOKEN}}`
+
+### Get Pending Invites
+
+```
+GET /api/v1/auth/pending-invites
+```
+
+**Headers:** `Authorization: Bearer {{TOKEN}}`
 
 ---
 
 ## HMAC Authentication
 
-HMAC (Hash-based Message Authentication Code) is used for all wallet and transaction operations.
+HMAC is used for all wallet and transaction operations.
 
 ### Required Headers
 
-Every HMAC request must include these headers:
-
 | Header | Description | Example |
 |--------|-------------|---------|
-| `X-API-Key` | Your API key | `hpk_abc123...` |
+| `X-API-Key` | Your API key | `hpk_test_abc123...` |
 | `X-Timestamp` | Unix timestamp (seconds) | `1713260400` |
+| `X-Request-ID` | Unique UUID | `550e8400-e29b-41d4...` |
 | `X-Signature` | HMAC-SHA256 signature | `a1b2c3d4e5f6...` |
 
 ### Signature Generation
 
-The signature is generated by signing a specific string with your Secret Key.
-
-**String to Sign Format:**
+**Payload format:**
 ```
-{HTTP_METHOD}\n{PATH}\n{TIMESTAMP}\n{BODY}
+{timestamp}:{request_id}:{body}
 ```
 
-**Example:**
-```
-POST
-/api/v1/wallets
-1713260400
-{"chain":"ethereum","network":"sepolia","label":"My Wallet"}
-```
-
-### Code Examples
-
-#### Node.js
+### Node.js Example
 
 ```javascript
 const crypto = require('crypto');
-const axios = require('axios');
 
-class HasaPayClient {
-  constructor(apiKey, secretKey) {
-    this.apiKey = apiKey;
-    this.secretKey = secretKey;
-    this.baseURL = 'https://apitest.hasapay.com';
-  }
-
-  generateSignature(method, path, timestamp, body) {
-    const bodyString = body ? JSON.stringify(body) : '';
-    const stringToSign = `${method}\n${path}\n${timestamp}\n${bodyString}`;
-    
-    return crypto
-      .createHmac('sha256', this.secretKey)
-      .update(stringToSign)
-      .digest('hex');
-  }
-
-  async request(method, path, body = null) {
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const signature = this.generateSignature(method, path, timestamp, body);
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-API-Key': this.apiKey,
-      'X-Timestamp': timestamp,
-      'X-Signature': signature,
-    };
-
-    const response = await axios({
-      method,
-      url: `${this.baseURL}${path}`,
-      headers,
-      data: body,
-    });
-
-    return response.data;
-  }
-
-  // Create wallet
-  async createWallet(chain, network, label) {
-    return this.request('POST', '/api/v1/wallets', { chain, network, label });
-  }
-
-  // List wallets
-  async listWallets() {
-    return this.request('GET', '/api/v1/wallets');
-  }
-
-  // Create address
-  async createAddress(walletId, label, metadata = {}) {
-    return this.request('POST', `/api/v1/wallets/${walletId}/addresses`, {
-      label,
-      metadata,
-    });
-  }
+function generateHMACAuth(body, apiKey, secretKey) {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const requestId = crypto.randomUUID();
+  const bodyString = body ? JSON.stringify(body) : '';
+  
+  const payload = `${timestamp}:${requestId}:${bodyString}`;
+  const signature = crypto
+    .createHmac('sha256', secretKey)
+    .update(payload)
+    .digest('hex');
+  
+  return {
+    'X-API-Key': apiKey,
+    'X-Timestamp': timestamp,
+    'X-Request-ID': requestId,
+    'X-Signature': signature
+  };
 }
-
-// Usage
-const client = new HasaPayClient('hpk_your_api_key', 'hps_your_secret_key');
-
-// Create a wallet
-const wallet = await client.createWallet('ethereum', 'sepolia', 'My Wallet');
-console.log(wallet);
 ```
 
-#### Python
+### Python Example
 
 ```python
 import hmac
 import hashlib
-import json
 import time
-import requests
+import uuid
+import json
 
-class HasaPayClient:
-    def __init__(self, api_key, secret_key):
-        self.api_key = api_key
-        self.secret_key = secret_key
-        self.base_url = 'https://apitest.hasapay.com'
-
-    def generate_signature(self, method, path, timestamp, body=None):
-        body_string = json.dumps(body, separators=(',', ':')) if body else ''
-        string_to_sign = f"{method}\n{path}\n{timestamp}\n{body_string}"
-        
-        signature = hmac.new(
-            self.secret_key.encode(),
-            string_to_sign.encode(),
-            hashlib.sha256
-        ).hexdigest()
-        
-        return signature
-
-    def request(self, method, path, body=None):
-        timestamp = str(int(time.time()))
-        signature = self.generate_signature(method, path, timestamp, body)
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'X-API-Key': self.api_key,
-            'X-Timestamp': timestamp,
-            'X-Signature': signature,
-        }
-        
-        response = requests.request(
-            method=method,
-            url=f"{self.base_url}{path}",
-            headers=headers,
-            json=body
-        )
-        
-        return response.json()
-
-    def create_wallet(self, chain, network, label):
-        return self.request('POST', '/api/v1/wallets', {
-            'chain': chain,
-            'network': network,
-            'label': label
-        })
-
-    def list_wallets(self):
-        return self.request('GET', '/api/v1/wallets')
-
-    def create_address(self, wallet_id, label, metadata=None):
-        return self.request('POST', f'/api/v1/wallets/{wallet_id}/addresses', {
-            'label': label,
-            'metadata': metadata or {}
-        })
-
-
-# Usage
-client = HasaPayClient('hpk_your_api_key', 'hps_your_secret_key')
-
-# Create a wallet
-wallet = client.create_wallet('ethereum', 'sepolia', 'My Wallet')
-print(wallet)
+def generate_hmac_auth(body, api_key, secret_key):
+    timestamp = str(int(time.time()))
+    request_id = str(uuid.uuid4())
+    body_string = json.dumps(body, separators=(',', ':')) if body else ''
+    
+    payload = f"{timestamp}:{request_id}:{body_string}"
+    signature = hmac.new(
+        secret_key.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    
+    return {
+        'X-API-Key': api_key,
+        'X-Timestamp': timestamp,
+        'X-Request-ID': request_id,
+        'X-Signature': signature
+    }
 ```
 
-#### PHP
+### PHP Example
 
 ```php
 <?php
-
-class HasaPayClient {
-    private $apiKey;
-    private $secretKey;
-    private $baseURL = 'https://apitest.hasapay.com';
-
-    public function __construct($apiKey, $secretKey) {
-        $this->apiKey = $apiKey;
-        $this->secretKey = $secretKey;
-    }
-
-    private function generateSignature($method, $path, $timestamp, $body = null) {
-        $bodyString = $body ? json_encode($body, JSON_UNESCAPED_SLASHES) : '';
-        $stringToSign = "{$method}\n{$path}\n{$timestamp}\n{$bodyString}";
-        
-        return hash_hmac('sha256', $stringToSign, $this->secretKey);
-    }
-
-    public function request($method, $path, $body = null) {
-        $timestamp = (string) time();
-        $signature = $this->generateSignature($method, $path, $timestamp, $body);
-
-        $headers = [
-            'Content-Type: application/json',
-            'X-API-Key: ' . $this->apiKey,
-            'X-Timestamp: ' . $timestamp,
-            'X-Signature: ' . $signature,
-        ];
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $this->baseURL . $path);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        
-        if ($body) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-        }
-
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        return json_decode($response, true);
-    }
-
-    public function createWallet($chain, $network, $label) {
-        return $this->request('POST', '/api/v1/wallets', [
-            'chain' => $chain,
-            'network' => $network,
-            'label' => $label
-        ]);
-    }
-}
-
-// Usage
-$client = new HasaPayClient('hpk_your_api_key', 'hps_your_secret_key');
-$wallet = $client->createWallet('ethereum', 'sepolia', 'My Wallet');
-print_r($wallet);
-```
-
-### HMAC Endpoints
-
-These endpoints require HMAC authentication:
-
-| Category | Endpoints |
-|----------|-----------|
-| Wallets | `/wallets`, `/wallets/:id` |
-| Addresses | `/wallets/:id/addresses`, `/addresses/:id` |
-| Transactions | `/transactions`, `/transactions/:id`, `/transactions/send` |
-| Balances | `/wallets/:id/balances` |
-| Stats | `/stats`, `/stats/volume`, `/stats/chains` |
-
----
-
-## Timestamp Validation
-
-The server validates that the timestamp is within **5 minutes** of the current time. This prevents replay attacks.
-
-If you receive a `401` error with message "timestamp expired", ensure:
-1. Your system clock is accurate
-2. You're generating the timestamp at request time, not caching it
-
----
-
-## Common Errors
-
-### Invalid Signature
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_SIGNATURE",
-    "message": "The request signature is invalid"
-  }
+function generateHMACAuth($body, $apiKey, $secretKey) {
+    $timestamp = (string) time();
+    $requestId = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+        mt_rand(0, 0xffff),
+        mt_rand(0, 0x0fff) | 0x4000,
+        mt_rand(0, 0x3fff) | 0x8000,
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+    );
+    $bodyString = $body ? json_encode($body) : '';
+    
+    $payload = "{$timestamp}:{$requestId}:{$bodyString}";
+    $signature = hash_hmac('sha256', $payload, $secretKey);
+    
+    return [
+        'X-API-Key' => $apiKey,
+        'X-Timestamp' => $timestamp,
+        'X-Request-ID' => $requestId,
+        'X-Signature' => $signature
+    ];
 }
 ```
 
-**Causes:**
-- Secret key is incorrect
-- Body JSON format differs from what was signed
-- HTTP method doesn't match
-- Path is incorrect (must include `/api/v1/`)
-
-### Timestamp Expired
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "TIMESTAMP_EXPIRED",
-    "message": "Request timestamp is too old"
-  }
-}
-```
-
-**Solution:** Generate a fresh timestamp for each request.
-
-### Missing API Key
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "MISSING_API_KEY",
-    "message": "X-API-Key header is required"
-  }
-}
-```
-
-**Solution:** Include the `X-API-Key` header in your request.
-
 ---
 
-## Security Best Practices
+## Auth Endpoints Summary
 
-1. **Never expose your Secret Key** - Keep it server-side only
-2. **Use environment variables** - Don't hardcode credentials
-3. **Rotate keys periodically** - Generate new API keys in the dashboard
-4. **Use HTTPS only** - All API requests must use HTTPS
-5. **Validate webhooks** - Verify webhook signatures before processing
-
----
-
-## Testing Authentication
-
-Use this endpoint to verify your HMAC setup is working:
-
-```bash
-# List your wallets (requires valid HMAC)
-curl -X GET https://apitest.hasapay.com/api/v1/wallets \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: $(date +%s)" \
-  -H "X-Signature: your_signature"
-```
-
-If you get a `200` response with your wallets list (even if empty), your authentication is working correctly!
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/auth/register` | None | Register organization |
+| POST | `/auth/verify-email` | None | Verify email |
+| POST | `/auth/resend-code` | None | Resend verification |
+| POST | `/auth/login` | None | Login |
+| POST | `/auth/select-org` | None | Select org (multi-org) |
+| POST | `/auth/forgot-password` | None | Request password reset |
+| GET | `/auth/reset-password/:token` | None | Validate reset token |
+| POST | `/auth/reset-password/:token` | None | Reset password |
+| GET | `/auth/invite/:token` | None | Get invite details |
+| POST | `/auth/invite/:token/accept` | None | Accept invite (new user) |
+| GET | `/auth/my-organizations` | JWT | List organizations |
+| POST | `/auth/switch-org` | JWT | Switch organization |
+| GET | `/auth/pending-invites` | JWT | List pending invites |
+| POST | `/auth/invite/:token/accept-existing` | JWT | Accept invite (existing) |
+| POST | `/auth/invite/:token/decline` | JWT | Decline invite |
