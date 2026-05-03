@@ -13,6 +13,7 @@
 * [Wallets](api-reference/wallets.md)
 * [Addresses](api-reference/addresses.md)
 * [Transactions](api-reference/transactions.md)
+* [Balances](api-reference/balances.md)
 * [Assets](api-reference/assets.md)
 * [Webhooks](api-reference/webhooks.md)
 * [Team](api-reference/team.md)

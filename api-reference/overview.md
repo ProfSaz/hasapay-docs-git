@@ -100,6 +100,7 @@ See [Authentication](../documentation/authentication.md) for details.
 | GET | `/auth/pending-invites` | List pending invites |
 | POST | `/auth/invite/:token/accept-existing` | Accept invite (existing user) |
 | POST | `/auth/invite/:token/decline` | Decline invite |
+| PUT | `/auth/change-password` | Change password |
 
 ### Wallets (HMAC)
 
@@ -132,6 +133,13 @@ See [Authentication](../documentation/authentication.md) for details.
 | GET | `/transactions/:id/status` | Get transaction status |
 | GET | `/transactions/hash/:hash` | Get by tx hash |
 
+### Balances (HMAC)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/wallets/:id/balance` | Get single asset balance |
+| GET | `/wallets/:id/balances` | Get all balances for wallet |
+
 ### Assets (HMAC)
 
 | Method | Endpoint | Description |
@@ -152,13 +160,16 @@ See [Authentication](../documentation/authentication.md) for details.
 | PUT | `/webhooks/:id` | Update webhook |
 | DELETE | `/webhooks/:id` | Delete webhook |
 | GET | `/webhooks/:id/deliveries` | List deliveries |
+| GET | `/webhooks/:id/deliveries/:deliveryId` | Get delivery detail |
 | POST | `/webhooks/:id/deliveries/:deliveryId/retry` | Retry delivery |
+| GET | `/deliveries` | List all deliveries |
 
 ### Team (JWT)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/team/me` | Get my profile |
+| PUT | `/team/me` | Update my profile |
 | GET | `/team/members` | List team members |
 | GET | `/team/invites` | List pending invites |
 | POST | `/team/invite` | Invite user |

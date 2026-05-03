@@ -157,9 +157,29 @@ POST /api/v1/auth/resend-code
 
 ---
 
-## Password Reset Flow
+## Password Management
 
-### 1. Request Password Reset
+### Change Password
+
+Change password while logged in.
+
+```
+PUT /api/v1/auth/change-password
+```
+
+**Headers:** `Authorization: Bearer {{TOKEN}}`
+
+**Request:**
+```json
+{
+  "current_password": "SecurePass123!",
+  "new_password": "NewSecurePass456!"
+}
+```
+
+### Forgot Password
+
+Request a password reset email.
 
 ```
 POST /api/v1/auth/forgot-password
@@ -172,13 +192,13 @@ POST /api/v1/auth/forgot-password
 }
 ```
 
-### 2. Validate Reset Token
+### Validate Reset Token
 
 ```
 GET /api/v1/auth/reset-password/:token
 ```
 
-### 3. Reset Password
+### Reset Password
 
 ```
 POST /api/v1/auth/reset-password/:token
@@ -309,13 +329,13 @@ function generateHMACAuth(body, apiKey, secretKey) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const requestId = crypto.randomUUID();
   const bodyString = body ? JSON.stringify(body) : '';
-  
+
   const payload = `${timestamp}:${requestId}:${bodyString}`;
   const signature = crypto
     .createHmac('sha256', secretKey)
     .update(payload)
     .digest('hex');
-  
+
   return {
     'X-API-Key': apiKey,
     'X-Timestamp': timestamp,
@@ -338,14 +358,14 @@ def generate_hmac_auth(body, api_key, secret_key):
     timestamp = str(int(time.time()))
     request_id = str(uuid.uuid4())
     body_string = json.dumps(body, separators=(',', ':')) if body else ''
-    
+
     payload = f"{timestamp}:{request_id}:{body_string}"
     signature = hmac.new(
         secret_key.encode(),
         payload.encode(),
         hashlib.sha256
     ).hexdigest()
-    
+
     return {
         'X-API-Key': api_key,
         'X-Timestamp': timestamp,
@@ -368,10 +388,10 @@ function generateHMACAuth($body, $apiKey, $secretKey) {
         mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
     );
     $bodyString = $body ? json_encode($body) : '';
-    
+
     $payload = "{$timestamp}:{$requestId}:{$bodyString}";
     $signature = hash_hmac('sha256', $payload, $secretKey);
-    
+
     return [
         'X-API-Key' => $apiKey,
         'X-Timestamp' => $timestamp,
@@ -402,3 +422,4 @@ function generateHMACAuth($body, $apiKey, $secretKey) {
 | GET | `/auth/pending-invites` | JWT | List pending invites |
 | POST | `/auth/invite/:token/accept-existing` | JWT | Accept invite (existing) |
 | POST | `/auth/invite/:token/decline` | JWT | Decline invite |
+| PUT | `/auth/change-password` | JWT | Change password |
