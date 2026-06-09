@@ -89,7 +89,7 @@ HMAC authenticates programmatic API key holders. The server reconstructs the sig
 
 | Header | Description | Example |
 |---|---|---|
-| `X-API-Key` | Your API key (the public half) | `hpk_test_abc123...` |
+| `X-API-Key` | Your API key (the public half) | `WzKQ1n5L8bJ9c3VfXmnPq...` (~44 chars) |
 | `X-Signature` | Hex-encoded HMAC-SHA256 of the payload | `a1b2c3...` |
 | `X-Timestamp` | Unix seconds at request time | `1713260400` |
 | `X-Request-ID` | A fresh UUID per request | `550e8400-e29b-41d4-a716-446655440000` |
@@ -173,7 +173,7 @@ class HasaPayClient {
 }
 
 // Usage
-const client = new HasaPayClient('hpk_test_...', 'hps_test_...');
+const client = new HasaPayClient('your_api_key', 'your_secret_key');
 const wallets = await client.request('GET', '/api/v1/wallets');
 ```
 
@@ -221,7 +221,7 @@ class HasaPayClient:
         ).json()
 
 # Usage
-client = HasaPayClient('hpk_test_...', 'hps_test_...')
+client = HasaPayClient('your_api_key', 'your_secret_key')
 wallets = client.request('GET', '/api/v1/wallets')
 ```
 
@@ -248,7 +248,7 @@ func sign(secretKey, timestamp, requestID, body string) string {
 timestamp := fmt.Sprintf("%d", time.Now().Unix())
 requestID := uuid.NewString()
 body := `{"chain":"ethereum","network":"sepolia"}`
-signature := sign("hps_test_...", timestamp, requestID, body)
+signature := sign("your_secret_key", timestamp, requestID, body)
 ```
 
 **Important Python note:** `json.dumps(body, separators=(',', ':'))` produces no whitespace. The bytes you send on the wire and the bytes you sign must be byte-identical — if you `json.dumps(body)` (with default separators) for signing but the request library re-serializes with different separators, the signature won't match. Easiest fix: serialize once into a string, sign that string, send that string as the body.

@@ -15,8 +15,8 @@ Each API key has two halves:
 
 | Component | Format | Header | Description |
 |---|---|---|---|
-| API Key | `hpk_test_...` / `hpk_live_...` | `X-API-Key` | Public identifier |
-| Secret Key | `hps_test_...` / `hps_live_...` | (used to sign, never sent) | Private key for HMAC-SHA256 |
+| API Key | ~44-char URL-safe base64 string | `X-API-Key` | Public identifier |
+| Secret Key | ~44-char URL-safe base64 string | (used to sign, never sent) | Private key for HMAC-SHA256 |
 
 > The secret key is **only shown once** — in the create response. Lose it, rotate the key.
 
@@ -56,9 +56,9 @@ curl -X POST https://apitest.hasapay.com/api/v1/api-keys \
   "message": "API key created successfully. Save these credentials - they won't be shown again!",
   "api_key": {
     "id": "uuid",
-    "key": "hpk_live_abc123...",
-    "secret_key": "hps_live_xyz789...",
-    "key_prefix": "hpk_live_abc123",
+    "key": "WzKQ1n5L8bJ9c3VfXmnPqRdSuTwXyZaBcDeFgHiJkLm=",
+    "secret_key": "rH9Tc2VbN4lKp7Q5WgYz8Xm3PnRoSpTqUvWxYz1AbCd=",
+    "key_prefix": "WzKQ1n5L",
     "name": "Production worker",
     "environment": "production",
     "permissions": ["wallet:read", "transaction:create", "balance:read"],
@@ -85,7 +85,7 @@ Returns every key on the org **without** the full key string or secret — only 
   "data": [
     {
       "id": "uuid",
-      "key_prefix": "hpk_live_abc123",
+      "key_prefix": "WzKQ1n5L",
       "name": "Production worker",
       "permissions": ["wallet:read", "transaction:create"],
       "environment": "production",

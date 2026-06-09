@@ -7,7 +7,7 @@ Get your first wallet created and receive a test deposit in under 5 minutes.
 ## Prerequisites
 
 - A HasaPay account ([sign up](https://dashboardtest.hasapay.com/register))
-- Your API key (`hpk_test_...`) and secret key (`hps_test_...`) from the dashboard's API Keys page
+- Your API key and secret key from the dashboard's API Keys page
 - A REST client or shell with `curl`
 
 ---
