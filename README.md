@@ -19,7 +19,7 @@ Your keys, your crypto. We never store private keys on our servers.
 <td>
 
 ### ⚡ Multi-Chain Support
-Ethereum, Polygon, Tron, Base, BSC, Solana, Bitcoin, and Aptos.
+Ethereum, Polygon, Tron, Base, BSC, Solana, Bitcoin, and Aptos — with per-chain config overrides for thresholds, fees, and sweep behavior.
 
 </td>
 <td>
@@ -31,6 +31,12 @@ RESTful API with comprehensive SDKs. Go live in hours, not weeks.
 </tr>
 </table>
 
+### Built-in revenue infrastructure
+
+- **Auto-sweeping** — child-address funds consolidate to your master wallet on threshold, with per-chain overrides and manual triggers. Tron TRC-20 uses a fund-and-sweep flow that handles energy payment for you.
+- **Fee engine** — five-tier resolution (address → org × chain × network × token → chain → platform), server-side estimates for deposits and withdrawals, per-period analytics and per-source ranking.
+- **Webhooks** — signed, retried, with a queryable delivery log and manual retry.
+
 ---
 
 ## Quick Links
@@ -38,8 +44,10 @@ RESTful API with comprehensive SDKs. Go live in hours, not weeks.
 | Resource | Description |
 |----------|-------------|
 | [Quick Start](documentation/quickstart.md) | Get your first wallet created in 5 minutes |
-| [Authentication](documentation/authentication.md) | Learn about JWT and HMAC authentication |
+| [Authentication](documentation/authentication.md) | JWT, HMAC, and dual-auth — pick the right tier per endpoint |
 | [API Reference](api-reference/overview.md) | Browse all available endpoints |
+| [Fees](api-reference/fees.md) | Configure fees, preview them server-side, and pull analytics |
+| [Sweep](api-reference/sweep.md) | Auto-sweep config, per-chain overrides, manual triggers |
 | [Postman Collection](https://www.postman.com/hasapay) | Import and test APIs instantly |
 
 ---
@@ -58,12 +66,15 @@ After email verification, you'll receive:
 
 ### Step 3: Make Your First API Call
 
+HMAC writes require four headers — see [Authentication](documentation/authentication.md) for the full signing recipe.
+
 ```bash
 # Create a wallet
 curl -X POST https://apitest.hasapay.com/api/v1/wallets \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_api_key" \
   -H "X-Timestamp: $(date +%s)" \
+  -H "X-Request-ID: $(uuidgen)" \
   -H "X-Signature: your_hmac_signature" \
   -d '{
     "chain": "ethereum",

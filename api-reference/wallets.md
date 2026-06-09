@@ -1,37 +1,39 @@
 # Wallets API
 
-Create and manage HD (Hierarchical Deterministic) wallets across multiple blockchains.
+Create and manage HD master wallets across multiple blockchains. Master wallets are the parent of all child addresses on a chain/network.
 
-**Authentication:** HMAC
+**Authentication:**
+- **HMAC-only** for `POST /wallets`
+- **Dual-auth (JWT or HMAC)** for all reads and balance lookups
 
-**Base Path:** `/api/v1/wallets`
+**Base path:** `/api/v1/wallets`
 
 ---
 
-## Create Wallet
-
-Create a new master wallet on a specific blockchain.
+## Create master wallet
 
 ```
 POST /api/v1/wallets
 ```
+**Auth:** HMAC-only.
 
-### Request Body
+### Request body
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `chain` | string | Yes | Blockchain (ethereum, polygon, tron, base, bsc, solana, bitcoin, aptos) |
-| `network` | string | Yes | Network (mainnet, sepolia, amoy, shasta, etc.) |
-| `label` | string | No | Friendly name for the wallet |
+|---|---|---|---|
+| `chain` | string | Yes | `ethereum`, `polygon`, `tron`, `base`, `bsc`, `solana`, `bitcoin`, `aptos` |
+| `network` | string | Yes | `mainnet`, `sepolia`, `amoy`, `shasta`, etc. — see [supported networks](#supported-chains-and-networks) |
+| `label` | string | No | Friendly name |
 
-### Example Request
+### Example
 
 ```bash
 curl -X POST https://apitest.hasapay.com/api/v1/wallets \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Signature: $SIG" \
+  -H "X-Timestamp: $TS" \
+  -H "X-Request-ID: $RID" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature" \
   -d '{
     "chain": "ethereum",
     "network": "sepolia",
@@ -39,272 +41,188 @@ curl -X POST https://apitest.hasapay.com/api/v1/wallets \
   }'
 ```
 
-### Example Response
+### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "uuid",
+    "organization_id": "uuid",
     "chain": "ethereum",
     "network": "sepolia",
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+    "address": "0xd502b72b8D969D60D1094174b1457C73671eb9d8",
     "label": "Main ETH Wallet",
     "is_active": true,
     "child_count": 0,
-    "created_at": "2024-04-16T10:00:00Z",
-    "updated_at": "2024-04-16T10:00:00Z"
+    "created_at": "2026-06-09T10:00:00Z",
+    "updated_at": "2026-06-09T10:00:00Z"
   }
 }
 ```
 
-### Supported Chains & Networks
-
-| Chain | Mainnet | Testnet |
-|-------|---------|---------|
-| ethereum | `mainnet` | `sepolia` |
-| polygon | `mainnet` | `amoy` |
-| tron | `mainnet` | `shasta` |
-| base | `mainnet` | `sepolia` |
-| bsc | `mainnet` | `testnet` |
-| solana | `mainnet` | `devnet` |
-| bitcoin | `mainnet` | `testnet` |
-| aptos | `mainnet` | `testnet` |
+> Only one master wallet per `(organization, chain, network)`. Retrying create returns the existing wallet, not an error.
 
 ---
 
-## List Wallets
-
-Get all wallets for your organization.
+## List master wallets
 
 ```
 GET /api/v1/wallets
 ```
+**Auth:** Dual-auth.
 
-### Query Parameters
+### Query params
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `chain` | string | - | Filter by chain |
-| `network` | string | - | Filter by network |
-| `is_active` | boolean | - | Filter by active status |
-| `page` | integer | 1 | Page number |
-| `limit` | integer | 20 | Items per page (max 100) |
+| Param | Default | Description |
+|---|---|---|
+| `include_balances` | `false` | Inline current balances per wallet |
 
-### Example Request
-
-```bash
-curl -X GET "https://apitest.hasapay.com/api/v1/wallets?chain=ethereum&limit=10" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
-```
-
-### Example Response
+### Response
 
 ```json
 {
-  "success": true,
-  "data": {
-    "wallets": [
-      {
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "chain": "ethereum",
-        "network": "sepolia",
-        "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-        "label": "Main ETH Wallet",
-        "is_active": true,
-        "child_count": 5,
-        "balances": [
-          {
-            "token_symbol": "ETH",
-            "balance": "0.5",
-            "balance_usd": "1250.00"
-          },
-          {
-            "token_symbol": "USDC",
-            "balance": "1000.00",
-            "balance_usd": "1000.00"
-          }
-        ],
-        "created_at": "2024-04-16T10:00:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 3,
-      "total_pages": 1
+  "data": [
+    {
+      "id": "uuid",
+      "chain": "ethereum",
+      "network": "sepolia",
+      "address": "0xd502b72b...",
+      "label": "Main ETH Wallet",
+      "is_active": true,
+      "child_count": 5,
+      "balances": [
+        {
+          "asset_id": "uuid",
+          "token_symbol": "ETH",
+          "balance": "0.5",
+          "balance_raw": "500000000000000000",
+          "is_stale": false,
+          "last_synced": "2026-06-09T10:30:00Z"
+        }
+      ],
+      "created_at": "2026-06-09T10:00:00Z"
     }
-  }
+  ],
+  "count": 3
 }
 ```
 
 ---
 
-## Get Wallet
-
-Get details of a specific wallet.
+## Get master wallet
 
 ```
-GET /api/v1/wallets/:id
+GET /api/v1/wallets/:walletId
 ```
+**Auth:** Dual-auth.
 
-### Path Parameters
+### Query params
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | string | Wallet ID (UUID) |
+| Param | Default | Description |
+|---|---|---|
+| `include_balances` | `false` | Inline balances |
 
-### Example Request
+Returns a single wallet in the same shape as the list rows.
 
-```bash
-curl -X GET https://apitest.hasapay.com/api/v1/wallets/550e8400-e29b-41d4-a716-446655440000 \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
+---
+
+## Get single-token balance
+
 ```
+GET /api/v1/wallets/:walletId/balance
+```
+**Auth:** Dual-auth.
 
-### Example Response
+### Query params
+
+| Param | Required | Description |
+|---|---|---|
+| `chain` | Yes | Chain of the asset |
+| `network` | Yes | Network of the asset |
+| `token` | Yes | Token symbol (e.g. `USDC`) |
+| `token_address` | No | Contract address for ambiguous symbols (e.g. multiple USDCs on a chain) |
+
+### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
     "chain": "ethereum",
     "network": "sepolia",
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-    "label": "Main ETH Wallet",
-    "is_active": true,
-    "child_count": 5,
-    "balances": [
-      {
-        "asset_id": "asset_eth",
-        "token_symbol": "ETH",
-        "token_name": "Ethereum",
-        "balance": "0.5",
-        "balance_raw": "500000000000000000",
-        "decimals": 18,
-        "balance_usd": "1250.00"
-      }
-    ],
-    "created_at": "2024-04-16T10:00:00Z",
-    "updated_at": "2024-04-16T10:00:00Z"
+    "token_symbol": "USDC",
+    "balance": "1000.00",
+    "balance_raw": "1000000000",
+    "pending_in": "0",
+    "pending_in_raw": "0",
+    "pending_out": "0",
+    "pending_out_raw": "0"
   }
+}
+```
+
+`pending_in` is the sum of unconfirmed deposits; `pending_out` is the sum of unconfirmed withdrawals/sweeps. Both let you display a "pending balance" without waiting for confirmations.
+
+---
+
+## Get all balances for a wallet
+
+```
+GET /api/v1/wallets/:walletId/balances
+```
+**Auth:** Dual-auth.
+
+Returns every token balance the wallet holds on its chain/network.
+
+```json
+{
+  "data": [
+    {
+      "asset_id": "uuid",
+      "chain": "ethereum",
+      "network": "sepolia",
+      "token_symbol": "ETH",
+      "token_decimals": 18,
+      "balance": "0.5",
+      "balance_raw": "500000000000000000",
+      "is_stale": false,
+      "last_synced": "2026-06-09T10:30:00Z"
+    },
+    {
+      "asset_id": "uuid",
+      "chain": "ethereum",
+      "network": "sepolia",
+      "token_symbol": "USDC",
+      "token_decimals": 6,
+      "balance": "1000.00",
+      "balance_raw": "1000000000",
+      "is_stale": false,
+      "last_synced": "2026-06-09T10:30:00Z"
+    }
+  ]
 }
 ```
 
 ---
 
-## Update Wallet
+## Supported chains and networks
 
-Update wallet properties.
+| Chain | Mainnet | Testnet |
+|---|---|---|
+| `ethereum` | `mainnet` | `sepolia` |
+| `polygon` | `mainnet` | `amoy` |
+| `bsc` | `mainnet` | `testnet` |
+| `base` | `mainnet` | `sepolia` |
+| `tron` | `mainnet` | `shasta` |
 
-```
-PUT /api/v1/wallets/:id
-```
-
-### Request Body
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `label` | string | No | New label |
-| `is_active` | boolean | No | Active status |
-
-### Example Request
-
-```bash
-curl -X PUT https://apitest.hasapay.com/api/v1/wallets/550e8400-e29b-41d4-a716-446655440000 \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature" \
-  -d '{
-    "label": "Updated Wallet Name",
-    "is_active": true
-  }'
-```
-
-### Example Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "label": "Updated Wallet Name",
-    "is_active": true,
-    "updated_at": "2024-04-16T11:00:00Z"
-  }
-}
-```
-
----
-
-## Get Wallet Balances
-
-Get all token balances for a wallet.
-
-```
-GET /api/v1/wallets/:id/balances
-```
-
-### Example Request
-
-```bash
-curl -X GET https://apitest.hasapay.com/api/v1/wallets/550e8400-e29b-41d4-a716-446655440000/balances \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
-```
-
-### Example Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-    "balances": [
-      {
-        "asset_id": "asset_eth",
-        "token_symbol": "ETH",
-        "token_name": "Ethereum",
-        "contract_address": null,
-        "balance": "0.5",
-        "balance_raw": "500000000000000000",
-        "decimals": 18,
-        "balance_usd": "1250.00",
-        "is_native": true
-      },
-      {
-        "asset_id": "asset_usdc",
-        "token_symbol": "USDC",
-        "token_name": "USD Coin",
-        "contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "balance": "1000.00",
-        "balance_raw": "1000000000",
-        "decimals": 6,
-        "balance_usd": "1000.00",
-        "is_native": false
-      }
-    ],
-    "total_balance_usd": "2250.00",
-    "last_updated": "2024-04-16T10:30:00Z"
-  }
-}
-```
+Solana, Bitcoin, and Aptos are scaffolded but not generally available.
 
 ---
 
 ## Errors
 
-| Code | Description |
-|------|-------------|
-| `WALLET_NOT_FOUND` | Wallet with specified ID doesn't exist |
-| `WALLET_ALREADY_EXISTS` | Wallet already exists for this chain/network |
-| `INVALID_CHAIN` | Unsupported blockchain |
+| Code | Cause |
+|---|---|
+| `WALLET_NOT_FOUND` | No wallet with that ID on this org |
+| `WALLET_ALREADY_EXISTS` | Returned existing — see note under create |
+| `INVALID_CHAIN` | Unsupported chain string |
 | `INVALID_NETWORK` | Unsupported network for this chain |
-| `WALLET_LIMIT_REACHED` | Maximum wallet limit reached (testnet) |

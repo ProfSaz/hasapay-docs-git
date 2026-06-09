@@ -1,91 +1,82 @@
 # API Reference Overview
 
-Base URL: `https://apitest.hasapay.com/api/v1`
+**Base URL:** `https://apitest.hasapay.com/api/v1`
 
 ---
 
-## Authentication Types
+## Authentication tiers
 
-| Type | Header | Used For |
-|------|--------|----------|
-| JWT | `Authorization: Bearer <token>` | User management, webhooks, API keys |
-| HMAC | `X-API-Key`, `X-Timestamp`, `X-Signature` | Wallets, addresses, transactions |
+| Tier | Header(s) | Used for |
+|---|---|---|
+| **JWT** | `Authorization: Bearer <token>` | User/org/team management, API key CRUD, settings |
+| **HMAC** | `X-API-Key`, `X-Signature`, `X-Timestamp`, `X-Request-ID` | Sensitive financial writes (wallet create, sends, address writes) |
+| **Dual-auth** | Either JWT *or* HMAC | Every read endpoint + most config writes |
 
-See [Authentication](../documentation/authentication.md) for details.
+Full details in [Authentication](../documentation/authentication.md).
 
 ---
 
-## Response Format
+## Response shapes
 
-All responses follow this structure:
+### Success
 
-### Success Response
+Single resource:
+
+```json
+{ "data": { /* resource */ } }
+```
+
+Lists:
 
 ```json
 {
-  "success": true,
-  "data": { ... }
+  "data": [ /* resources */ ],
+  "meta": { "limit": 50, "offset": 0, "count": 132 }
 }
 ```
 
-### Error Response
+> Pagination uses `limit` + `offset`. There is **no** `page` / `total_pages` style.
+
+Some endpoints (notably the create-style write routes) also include a `message` and the resource at the top level rather than under `data` — those are documented per-route.
+
+### Error
+
+Standard error envelope:
 
 ```json
 {
-  "success": false,
   "error": {
-    "code": "ERROR_CODE",
-    "message": "Human readable message"
+    "code": "validation_error",
+    "message": "Invalid request data",
+    "details": "..."
   }
 }
 ```
 
-### Paginated Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [ ... ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 100,
-      "total_pages": 5
-    }
-  }
-}
-```
+Some routes return a flat `{ "error": "..." }` (the simpler Gin form). Both are valid — check the `error` key first, treat it as the failure signal.
 
 ---
 
-## HTTP Status Codes
+## HTTP status codes
 
-| Code | Description |
-|------|-------------|
+| Code | Meaning |
+|---|---|
 | `200` | Success |
 | `201` | Created |
-| `400` | Bad Request - Invalid parameters |
-| `401` | Unauthorized - Invalid or missing authentication |
-| `403` | Forbidden - Insufficient permissions |
-| `404` | Not Found - Resource doesn't exist |
-| `409` | Conflict - Resource already exists |
-| `422` | Unprocessable Entity - Validation failed |
-| `429` | Too Many Requests - Rate limit exceeded |
-| `500` | Internal Server Error |
+| `400` | Bad request — body validation, invalid IDs |
+| `401` | Unauthorized — missing/invalid auth |
+| `403` | Forbidden — auth OK but caller lacks permission |
+| `404` | Not found |
+| `409` | Conflict — e.g. `duplicate_request` on HMAC replay |
+| `422` | Unprocessable — domain validation failed |
+| `429` | Rate limited |
+| `500` | Server error |
 
 ---
 
-## Rate Limits
+## Rate limits
 
-| Plan | Requests/Minute | Requests/Day |
-|------|-----------------|--------------|
-| Testnet | 60 | 500 |
-| Starter | 120 | 10,000 |
-| Growth | 300 | 50,000 |
-| Enterprise | Custom | Custom |
-
-Rate limit headers are included in every response:
+Rate limits apply per organization. Headers included on every response:
 
 ```
 X-RateLimit-Limit: 60
@@ -93,115 +84,198 @@ X-RateLimit-Remaining: 58
 X-RateLimit-Reset: 1713260460
 ```
 
+Limits scale with plan. Exceeding them returns `429`.
+
 ---
 
-## API Sections
+## Endpoint sections
 
-### 🔐 Authentication
-User registration, login, password management
+### 🔐 Auth
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/register` | Register new organization |
-| POST | `/auth/login` | Login and get JWT token |
-| POST | `/auth/verify-email` | Verify email with code |
-| POST | `/auth/forgot-password` | Request password reset |
-| POST | `/auth/reset-password/:token` | Reset password |
+User registration, login, multi-org selection, password reset, invite handling. Public + JWT-protected.
+
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/auth/register` | Public |
+| POST | `/auth/verify-email` | Public |
+| POST | `/auth/resend-code` | Public |
+| POST | `/auth/login` | Public |
+| POST | `/auth/select-org` | Public |
+| POST | `/auth/forgot-password` | Public |
+| GET | `/auth/reset-password/:token` | Public |
+| POST | `/auth/reset-password/:token` | Public |
+| GET | `/auth/invite/:token` | Public |
+| POST | `/auth/invite/:token/accept` | Public |
+| POST | `/auth/switch-org` | JWT |
+| GET | `/auth/my-organizations` | JWT |
+| POST | `/auth/invite/:token/accept-existing` | JWT |
+| POST | `/auth/invite/:token/decline` | JWT |
+| GET | `/auth/pending-invites` | JWT |
+| PUT | `/auth/change-password` | JWT |
+
+→ See [Auth flow](../documentation/auth.md)
 
 ### 👛 Wallets
-Create and manage HD wallets
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/wallets` | Create a new wallet |
-| GET | `/wallets` | List all wallets |
-| GET | `/wallets/:id` | Get wallet details |
-| PUT | `/wallets/:id` | Update wallet |
-| GET | `/wallets/:id/balances` | Get wallet balances |
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/wallets` | HMAC |
+| GET | `/wallets` | Dual |
+| GET | `/wallets/:walletId` | Dual |
+| GET | `/wallets/:walletId/balance` | Dual |
+| GET | `/wallets/:walletId/balances` | Dual |
+
+→ See [Wallets](wallets.md)
 
 ### 📍 Addresses
-Generate and manage deposit addresses
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/wallets/:id/addresses` | Create child address |
-| GET | `/wallets/:id/addresses` | List wallet addresses |
-| GET | `/addresses` | List all addresses |
-| GET | `/addresses/:id` | Get address details |
-| PUT | `/addresses/:id` | Update address |
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/wallets/:walletId/address` (singular!) | HMAC |
+| GET | `/wallets/:walletId/addresses` | Dual |
+| GET | `/wallets/:walletId/addresses/:addressId` | Dual |
+| PUT | `/wallets/:walletId/addresses/:addressId` | HMAC |
+| PUT | `/wallets/:walletId/addresses/:addressId/auto-sweep` | HMAC |
+| GET | `/addresses` | Dual |
+
+→ See [Addresses](addresses.md)
 
 ### 💸 Transactions
-View and send transactions
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/transactions` | List all transactions |
-| GET | `/transactions/:id` | Get transaction details |
-| POST | `/transactions/send` | Send a transaction |
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/transactions` | Dual |
+| GET | `/transactions/:id` | Dual |
+| GET | `/transactions/:id/status` | Dual |
+| GET | `/transactions/hash/:hash` | Dual |
+| POST | `/wallets/:walletId/send` | HMAC |
+| POST | `/wallets/:walletId/addresses/:addressId/send` | HMAC |
+| POST | `/wallets/:walletId/addresses/:addressId/estimate-gas` | HMAC |
+
+→ See [Transactions](transactions.md)
 
 ### 🪙 Assets
-Manage supported cryptocurrencies
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/assets/supported` | List all available assets |
-| GET | `/assets` | List enabled assets |
-| POST | `/assets/enable` | Enable assets |
-| DELETE | `/assets/:id` | Disable an asset |
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/assets/supported` | Dual |
+| GET | `/assets` | Dual |
+| POST | `/assets/enable` | Dual |
+| DELETE | `/assets/:asset_id` | Dual |
+
+→ See [Assets](assets.md)
 
 ### 🔔 Webhooks
-Real-time event notifications
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/webhooks` | Create webhook |
-| GET | `/webhooks` | List webhooks |
-| GET | `/webhooks/:id` | Get webhook details |
-| PUT | `/webhooks/:id` | Update webhook |
-| DELETE | `/webhooks/:id` | Delete webhook |
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/webhooks/events` | Dual |
+| POST | `/webhooks` | Dual |
+| GET | `/webhooks` | Dual |
+| GET | `/webhooks/:id` | Dual |
+| PUT | `/webhooks/:id` | Dual |
+| DELETE | `/webhooks/:id` | Dual |
+| GET | `/webhooks/:id/deliveries` | Dual |
+| GET | `/webhooks/:id/deliveries/:deliveryId` | Dual |
+| POST | `/webhooks/:id/deliveries/:deliveryId/retry` | Dual |
+| GET | `/deliveries` | Dual |
+
+→ See [Webhooks](webhooks.md)
 
 ### 🔑 API Keys
-Manage API credentials
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api-keys` | Create API key |
-| GET | `/api-keys` | List API keys |
-| PUT | `/api-keys/:id` | Update API key |
-| DELETE | `/api-keys/:id` | Revoke API key |
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/api-keys` | JWT |
+| POST | `/api-keys` | JWT |
+| GET | `/api-keys/:id` | JWT |
+| PUT | `/api-keys/:id` | JWT |
+| DELETE | `/api-keys/:id` | JWT |
+
+→ See [API Keys](api-keys.md)
 
 ### 👥 Team
-Team member management
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/team/me` | Get current user |
-| PUT | `/team/me` | Update profile |
-| GET | `/team/members` | List team members |
-| POST | `/team/invite` | Invite team member |
-| DELETE | `/team/members/:id` | Remove team member |
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/team/me` | JWT |
+| PUT | `/team/me` | JWT |
+| GET | `/team/members` | JWT |
+| GET | `/team/invites` | JWT |
+| POST | `/team/invite` | JWT |
+| POST | `/team/invites/:id/resend` | JWT |
+| DELETE | `/team/invites/:id` | JWT |
+| PUT | `/team/members/:id/role` | JWT |
+| POST | `/team/members/:id/deactivate` | JWT |
+| POST | `/team/members/:id/reactivate` | JWT |
+| DELETE | `/team/members/:id` | JWT |
+| POST | `/team/leave` | JWT |
+
+→ See [Team](team.md)
+
+### ⚙️ Settings
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/settings/organization` | JWT |
+| PUT | `/settings/organization` | JWT |
+
+→ See [Settings](settings.md)
 
 ### 📊 Stats
-Dashboard statistics
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/stats` | Get organization stats |
-| GET | `/stats/volume` | Get volume history |
-| GET | `/stats/chains` | Get chain breakdown |
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/stats` | Dual |
+| GET | `/stats/volume` | Dual |
+| GET | `/stats/chains` | Dual |
+
+→ See [Stats](stats.md)
+
+### 💰 Fees
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/fees/config` | Dual |
+| GET | `/fees/addresses` | Dual |
+| GET | `/fees/addresses/:addressId` | Dual |
+| PUT | `/fees/addresses/:addressId` | Dual |
+| DELETE | `/fees/addresses/:addressId` | Dual |
+| GET | `/fees/estimate` | Dual |
+| GET | `/fees/deposit/estimate` | Dual |
+| GET | `/fees/summary` | Dual |
+| GET | `/fees/history` | Dual |
+| GET | `/fees/sources` | Dual |
+| GET | `/fees/sources/:source_id` | Dual |
+
+→ See [Fees](fees.md) *(Phase 4 doc — coming)*
+
+### 🧹 Sweep
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/sweep/config` | Dual |
+| PUT | `/sweep/config` | Dual |
+| GET | `/sweep/config/:chain/:network` | Dual |
+| PUT | `/sweep/config/:chain/:network` | Dual |
+| DELETE | `/sweep/config/:chain/:network` | Dual |
+| GET | `/sweep/addresses` | Dual |
+| PUT | `/sweep/addresses/:addressId` | Dual |
+| POST | `/sweep/addresses/:addressId/trigger` | Dual |
+| GET | `/sweep/history` | Dual |
+
+→ See [Sweep](sweep.md) *(Phase 4 doc — coming)*
 
 ---
 
-## Postman Collection
+## Postman collection
 
-Import our Postman collection to test all endpoints:
-
-[**Download Postman Collection →**](https://hasapay.com/postman-collection.json)
+The most up-to-date endpoint reference outside this doc lives in the HasaPay repo: `docs/postman/orgapi.json`. Import that into Postman to test the org-facing API end-to-end.
 
 ---
 
-## Need Help?
+## Need help?
 
-- Check the [Authentication Guide](../documentation/authentication.md)
-- Review [Error Codes](#http-status-codes)
-- Contact support@hasapay.com
+- [Authentication](../documentation/authentication.md) — signing requests, dual-auth, JWT, HMAC, replay protection
+- [Quickstart](../documentation/quickstart.md) — wallet → address → deposit in 5 minutes
+- support@hasapay.com

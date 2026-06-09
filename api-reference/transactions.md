@@ -2,280 +2,253 @@
 
 View transaction history and send outgoing transactions.
 
-**Authentication:** HMAC
+**Authentication:**
+- **Dual-auth (JWT or HMAC)** for all reads
+- **HMAC-only** for all sends and gas estimates
 
-**Base Path:** `/api/v1/transactions`
+**Base path:** `/api/v1/transactions`
 
 ---
 
-## List Transactions
-
-Get all transactions for your organization.
+## List transactions
 
 ```
 GET /api/v1/transactions
 ```
+**Auth:** Dual-auth.
 
-### Query Parameters
+### Query params
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `type` | string | - | Filter by type: `deposit`, `withdrawal`, `transfer` |
-| `status` | string | - | Filter by status: `pending`, `confirmed`, `failed` |
-| `chain` | string | - | Filter by chain |
-| `network` | string | - | Filter by network |
-| `wallet_id` | string | - | Filter by wallet |
-| `address_id` | string | - | Filter by address |
-| `asset_id` | string | - | Filter by asset |
-| `from_date` | string | - | Start date (ISO 8601) |
-| `to_date` | string | - | End date (ISO 8601) |
-| `page` | integer | 1 | Page number |
-| `limit` | integer | 20 | Items per page (max 100) |
+| Param | Type | Description |
+|---|---|---|
+| `type` | string | `deposit`, `withdrawal`, `transfer`, `sweep` |
+| `status` | string | See [statuses](#statuses) below |
+| `chain` | string | Filter by chain |
+| `network` | string | Filter by network |
+| `wallet_id` | string | Filter by master wallet ID |
+| `address_id` | string | Filter by child address ID |
+| `asset_id` | string | Filter by asset |
+| `from_date` | string | ISO 8601 lower bound |
+| `to_date` | string | ISO 8601 upper bound |
+| `limit` | integer | Default 50 |
+| `offset` | integer | Default 0 |
 
-### Example Request
-
-```bash
-curl -X GET "https://apitest.hasapay.com/api/v1/transactions?type=deposit&status=confirmed&limit=10" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
-```
-
-### Example Response
+### Response
 
 ```json
 {
-  "success": true,
-  "data": {
-    "transactions": [
-      {
-        "id": "770e8400-e29b-41d4-a716-446655440002",
-        "type": "deposit",
-        "status": "confirmed",
-        "chain": "ethereum",
-        "network": "sepolia",
-        "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-        "address_id": "660e8400-e29b-41d4-a716-446655440001",
-        "from_address": "0x1234567890abcdef1234567890abcdef12345678",
-        "to_address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
-        "tx_hash": "0xabc123def456...",
-        "token_symbol": "USDC",
-        "token_name": "USD Coin",
-        "amount": "100.00",
-        "amount_raw": "100000000",
-        "amount_usd": "100.00",
-        "fee": "0.002",
-        "fee_usd": "5.00",
-        "confirmations": 12,
-        "required_confirmations": 12,
-        "block_number": 12345678,
-        "metadata": {
-          "customer_id": "cust_abc123"
-        },
-        "confirmed_at": "2024-04-16T10:15:00Z",
-        "created_at": "2024-04-16T10:10:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 25,
-      "total_pages": 3
-    }
-  }
+  "data": [ /* Transaction[] */ ],
+  "meta": { "limit": 50, "offset": 0, "count": 132 }
+}
+```
+
+### Transaction shape
+
+```json
+{
+  "id": "uuid",
+  "organization_id": "uuid",
+  "type": "deposit",
+  "status": "confirmed",
+  "chain": "ethereum",
+  "network": "sepolia",
+  "from_address": "0x...",
+  "to_address": "0x...",
+  "amount": "100.00",
+  "amount_raw": "100000000",
+  "tx_hash": "0xabc...",
+  "block_number": 12345678,
+  "confirmations": 12,
+  "required_confirmations": 12,
+  "asset_id": "uuid",
+  "token_symbol": "USDC",
+  "token_decimals": 6,
+  "wallet_id": "uuid",
+  "address_id": "uuid",
+  "created_at": "2026-06-09T10:10:00Z",
+  "updated_at": "2026-06-09T10:15:00Z"
 }
 ```
 
 ---
 
-## Get Transaction
-
-Get details of a specific transaction.
+## Get one transaction
 
 ```
 GET /api/v1/transactions/:id
 ```
+**Auth:** Dual-auth.
 
-### Path Parameters
+Returns the same Transaction shape as above.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | string | Transaction ID (UUID) |
+---
 
-### Example Request
+## Get transaction status (lightweight poll)
 
-```bash
-curl -X GET https://apitest.hasapay.com/api/v1/transactions/770e8400-e29b-41d4-a716-446655440002 \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
 ```
+GET /api/v1/transactions/:id/status
+```
+**Auth:** Dual-auth.
 
-### Example Response
+### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "id": "770e8400-e29b-41d4-a716-446655440002",
-    "type": "deposit",
-    "status": "confirmed",
-    "chain": "ethereum",
-    "network": "sepolia",
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-    "address_id": "660e8400-e29b-41d4-a716-446655440001",
-    "from_address": "0x1234567890abcdef1234567890abcdef12345678",
-    "to_address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
-    "tx_hash": "0xabc123def456789abc123def456789abc123def456789abc123def456789abcd",
-    "token_symbol": "USDC",
-    "token_name": "USD Coin",
-    "contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    "amount": "100.00",
-    "amount_raw": "100000000",
-    "decimals": 6,
-    "amount_usd": "100.00",
-    "fee": "0.002",
-    "fee_raw": "2000000000000000",
-    "fee_usd": "5.00",
-    "confirmations": 12,
-    "required_confirmations": 12,
-    "block_number": 12345678,
-    "block_hash": "0xdef789...",
-    "gas_used": "65000",
-    "gas_price": "30000000000",
-    "metadata": {
-      "customer_id": "cust_abc123",
-      "order_id": "order_xyz789"
-    },
-    "confirmed_at": "2024-04-16T10:15:00Z",
-    "created_at": "2024-04-16T10:10:00Z",
-    "updated_at": "2024-04-16T10:15:00Z"
+    "id": "uuid",
+    "status": "confirming",
+    "confirmations": 3,
+    "required_confirmations": 12
   }
 }
 ```
 
+Use this for polling — it skips the heavier joins the full GET does.
+
 ---
 
-## Send Transaction
-
-Send cryptocurrency from a wallet.
+## Look up by on-chain hash
 
 ```
-POST /api/v1/transactions/send
+GET /api/v1/transactions/hash/:hash
 ```
+**Auth:** Dual-auth.
 
-### Request Body
+Returns the Transaction matching that `tx_hash` on the caller's organization. 404 if the hash isn't recognized.
+
+---
+
+## Send from master wallet
+
+```
+POST /api/v1/wallets/:walletId/send
+```
+**Auth:** HMAC-only.
+
+### Request body
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `wallet_id` | string | Yes | Source wallet ID |
+|---|---|---|---|
 | `to_address` | string | Yes | Destination address |
-| `asset_id` | string | Yes | Asset to send |
-| `amount` | string | Yes | Amount to send (human readable) |
-| `metadata` | object | No | Custom data to attach |
-| `priority` | string | No | `low`, `medium`, `high` (affects gas) |
+| `amount` | string | Yes | **Raw token units** (e.g. `100000000` for 100 USDC at 6 decimals) |
+| `asset_id` | string (UUID) | Yes | The asset to send — fetch from `GET /assets` |
+| `idempotency_key` | string | No | Client-supplied idempotency key |
 
-### Example Request
+> The send body does **not** take `chain`, `network`, or `token` strings. The `asset_id` resolves chain + network + token + decimals on the server. Get asset IDs from `GET /api/v1/assets`.
+
+### Example
 
 ```bash
-curl -X POST https://apitest.hasapay.com/api/v1/transactions/send \
+curl -X POST https://apitest.hasapay.com/api/v1/wallets/{walletId}/send \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Signature: $SIG" \
+  -H "X-Timestamp: $TS" \
+  -H "X-Request-ID: $RID" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature" \
   -d '{
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-    "to_address": "0x9876543210fedcba9876543210fedcba98765432",
-    "asset_id": "asset_usdc_eth_sepolia",
-    "amount": "50.00",
-    "metadata": {
-      "payout_id": "payout_123",
-      "recipient": "Vendor ABC"
-    },
-    "priority": "medium"
+    "to_address": "0x9876...",
+    "amount": "50000000",
+    "asset_id": "uuid-of-usdc-sepolia",
+    "idempotency_key": "payout_2026_06_09_001"
   }'
 ```
 
-### Example Response
+### Response
 
 ```json
 {
   "success": true,
+  "message": "Transaction created and queued (sent from master wallet)",
   "data": {
-    "id": "880e8400-e29b-41d4-a716-446655440003",
+    "id": "uuid",
     "type": "withdrawal",
     "status": "pending",
     "chain": "ethereum",
     "network": "sepolia",
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-    "from_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-    "to_address": "0x9876543210fedcba9876543210fedcba98765432",
-    "tx_hash": "0xpending...",
-    "token_symbol": "USDC",
+    "from_address": "0x742d35Cc...",
+    "to_address": "0x9876...",
     "amount": "50.00",
     "amount_raw": "50000000",
-    "estimated_fee": "0.003",
-    "estimated_fee_usd": "7.50",
-    "metadata": {
-      "payout_id": "payout_123",
-      "recipient": "Vendor ABC"
-    },
-    "created_at": "2024-04-16T11:00:00Z"
+    "asset_id": "uuid",
+    "token_symbol": "USDC",
+    "created_at": "2026-06-09T11:00:00Z"
   }
 }
 ```
 
----
-
-## Transaction Statuses
-
-| Status | Description |
-|--------|-------------|
-| `pending` | Transaction submitted, waiting for confirmation |
-| `validating` | Transaction detected, validating on chain |
-| `queued` | Transaction queued for processing |
-| `confirmed` | Transaction confirmed on blockchain |
-| `completed` | Transaction fully processed |
-| `failed` | Transaction failed |
-| `dropped` | Transaction dropped from mempool |
-| `cancelled` | Transaction cancelled by user |
-
-### Status Flow
-
-**Deposits:**
-```
-validating → pending → confirmed → completed
-```
-
-**Withdrawals:**
-```
-queued → pending → confirmed → completed
-         ↓
-       failed/dropped
-```
+The transaction begins life at `status: pending` and progresses through `broadcasted → confirming → confirmed → completed`. Listen for `withdrawal.completed` (or `.failed`) via [webhooks](webhooks.md) rather than polling.
 
 ---
 
-## Transaction Types
+## Send from a child address
+
+```
+POST /api/v1/wallets/:walletId/addresses/:addressId/send
+```
+**Auth:** HMAC-only.
+
+Same request body as above (`to_address`, `amount`, `asset_id`, `idempotency_key`). Used when you want to send out of a specific child address rather than the master wallet — typically for routed-child withdrawals.
+
+---
+
+## Estimate gas
+
+```
+POST /api/v1/wallets/:walletId/addresses/:addressId/estimate-gas
+```
+**Auth:** HMAC-only.
+
+### Request body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `to_address` | string | Yes | Destination |
+| `amount` | string | Yes | Raw token units |
+| `asset_id` | string | No | Omit for a native-token estimate |
+
+For pure fee preview (no gas estimation, no on-chain probe) use [`GET /fees/estimate`](fees.md) instead — that walks the org's fee resolution chain and returns a usable quote without needing an address.
+
+---
+
+## Statuses
+
+| Status | Meaning |
+|---|---|
+| `pending` | Created, awaiting broadcast (withdrawal) or first confirmation (deposit) |
+| `broadcasted` | On-chain, but not yet seen by a confirmation poller |
+| `confirming` | Picked up by node, confirmations accruing |
+| `confirmed` | Reached `required_confirmations` |
+| `completed` | Reached terminal state with all post-processing done |
+| `failed` | Reverted, dropped, or expired |
+| `dropped` | Evicted from mempool |
+| `cancelled` | Cancelled by user (rare) |
+
+### Typical flow
+
+**Deposits:** `pending → confirmed → completed`
+**Withdrawals:** `pending → broadcasted → confirming → confirmed → completed` (or `failed` / `dropped` at any point past `pending`)
+**Sweeps:** same flow as withdrawals
+
+---
+
+## Types
 
 | Type | Description |
-|------|-------------|
-| `deposit` | Incoming funds to a child address |
-| `withdrawal` | Outgoing funds sent via API |
-| `transfer` | Internal transfer between addresses |
-| `sweep` | Auto-sweep from child to master wallet |
-| `fee` | Network fee transaction |
+|---|---|
+| `deposit` | Incoming funds to a child address (external sender) |
+| `withdrawal` | Outgoing funds sent via the API |
+| `transfer` | Internal transfer between addresses (rarely surfaced) |
+| `sweep` | Auto/manual sweep from child → master |
 
 ---
 
 ## Errors
 
-| Code | Description |
-|------|-------------|
-| `TRANSACTION_NOT_FOUND` | Transaction with specified ID doesn't exist |
-| `INSUFFICIENT_BALANCE` | Wallet doesn't have enough funds |
-| `INVALID_ADDRESS` | Destination address is invalid |
-| `INVALID_AMOUNT` | Amount is invalid or too small |
-| `ASSET_NOT_ENABLED` | Asset is not enabled for this organization |
-| `WITHDRAWAL_LIMIT_EXCEEDED` | Daily/monthly withdrawal limit exceeded |
-| `WALLET_INACTIVE` | Wallet is deactivated |
+| Code | Cause |
+|---|---|
+| `TRANSACTION_NOT_FOUND` | No transaction with that ID on this org |
+| `INSUFFICIENT_BALANCE` | Source doesn't have enough funds (including gas) |
+| `INVALID_ADDRESS` | Destination doesn't match the chain's address format |
+| `INVALID_AMOUNT` | Amount can't be parsed as a positive integer |
+| `ASSET_NOT_ENABLED` | Asset is not enabled for this org — call `POST /assets/enable` first |
+| `WALLET_INACTIVE` | Wallet was deactivated |

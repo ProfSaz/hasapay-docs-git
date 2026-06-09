@@ -1,364 +1,217 @@
 # Addresses API
 
-Generate and manage child addresses (deposit addresses) for your wallets.
+Child addresses (deposit / per-customer addresses) derived under a master wallet.
 
-**Authentication:** HMAC
+**Authentication:**
+- **HMAC-only** for create, update, auto-sweep, send, estimate-gas
+- **Dual-auth (JWT or HMAC)** for all reads
 
-**Base Path:** `/api/v1/wallets/:wallet_id/addresses` and `/api/v1/addresses`
+**Base paths:**
+- Org-wide: `/api/v1/addresses`
+- Wallet-scoped: `/api/v1/wallets/:walletId/addresses` (plus the singular create at `/wallets/:walletId/address`)
 
 ---
 
-## Create Address
+## Create address
 
-Generate a new child address for receiving deposits.
+> **Path note:** create is **singular** — `/address`, not `/addresses`.
 
 ```
-POST /api/v1/wallets/:wallet_id/addresses
+POST /api/v1/wallets/:walletId/address
 ```
+**Auth:** HMAC-only.
 
-### Path Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `wallet_id` | string | Parent wallet ID (UUID) |
-
-### Request Body
+### Request body
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `label` | string | No | Friendly name (e.g., "Customer-123") |
-| `metadata` | object | No | Custom data to attach (customer_id, order_id, etc.) |
+|---|---|---|---|
+| `external_user_id` | string | No | Your internal identifier — surfaced on webhooks |
+| `label` | string | No | Friendly name |
+| `metadata` | object | No | Arbitrary JSON — surfaced on webhooks |
+| `auto_sweep_enabled` | boolean | No | `null` = inherit from org default |
+| `sweep_threshold` | string | No | Min USD value to trigger sweep on this address |
 
-### Example Request
+### Example
 
 ```bash
-curl -X POST https://apitest.hasapay.com/api/v1/wallets/550e8400-e29b-41d4-a716-446655440000/addresses \
+curl -X POST https://apitest.hasapay.com/api/v1/wallets/{walletId}/address \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Signature: $SIG" \
+  -H "X-Timestamp: $TS" \
+  -H "X-Request-ID: $RID" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature" \
   -d '{
+    "external_user_id": "cust_abc123",
     "label": "Customer-001",
-    "metadata": {
-      "customer_id": "cust_abc123",
-      "order_id": "order_xyz789",
-      "product": "Premium Plan"
-    }
+    "metadata": {"order_id": "order_xyz"}
   }'
 ```
 
-### Example Response
+### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-    "address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
+    "id": "uuid",
+    "master_wallet_id": "uuid",
+    "organization_id": "uuid",
+    "external_user_id": "cust_abc123",
+    "label": "Customer-001",
+    "metadata": {"order_id": "order_xyz"},
     "chain": "ethereum",
     "network": "sepolia",
-    "label": "Customer-001",
-    "metadata": {
-      "customer_id": "cust_abc123",
-      "order_id": "order_xyz789",
-      "product": "Premium Plan"
-    },
+    "address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
+    "public_key": "0x04...",
+    "derivation_path": "m/44'/60'/0'/0/1",
     "derivation_index": 1,
     "is_active": true,
-    "created_at": "2024-04-16T10:05:00Z"
+    "is_assigned": true,
+    "auto_sweep_enabled": true,
+    "sweep_threshold": null,
+    "created_at": "2026-06-09T10:05:00Z",
+    "updated_at": "2026-06-09T10:05:00Z"
   }
 }
 ```
 
-> 💡 **Tip:** Use `metadata` to link addresses to your internal systems. When a deposit arrives, the metadata is included in the webhook payload.
+> Use `external_user_id` and/or `metadata` to link addresses to your internal records. Both surface on every webhook for transactions to/from this address.
 
 ---
 
-## List Wallet Addresses
-
-Get all addresses for a specific wallet.
+## List addresses for one wallet
 
 ```
-GET /api/v1/wallets/:wallet_id/addresses
+GET /api/v1/wallets/:walletId/addresses
 ```
+**Auth:** Dual-auth.
 
-### Query Parameters
+### Query params
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `is_active` | boolean | - | Filter by active status |
-| `page` | integer | 1 | Page number |
-| `limit` | integer | 20 | Items per page (max 100) |
+| Param | Default | Description |
+|---|---|---|
+| `include_balances` | `false` | Inline current balances per address |
+| `limit` | `50` | Page size |
+| `offset` | `0` | Pagination offset |
 
-### Example Request
-
-```bash
-curl -X GET "https://apitest.hasapay.com/api/v1/wallets/550e8400-e29b-41d4-a716-446655440000/addresses?limit=10" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
-```
-
-### Example Response
+### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "addresses": [
-      {
-        "id": "660e8400-e29b-41d4-a716-446655440001",
-        "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-        "address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
-        "label": "Customer-001",
-        "metadata": {
-          "customer_id": "cust_abc123"
-        },
-        "is_active": true,
-        "created_at": "2024-04-16T10:05:00Z"
-      },
-      {
-        "id": "660e8400-e29b-41d4-a716-446655440002",
-        "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-        "address": "0x9ca1f109551bD432803012645Ac136ddd64DBA73",
-        "label": "Customer-002",
-        "metadata": {
-          "customer_id": "cust_def456"
-        },
-        "is_active": true,
-        "created_at": "2024-04-16T10:10:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 2,
-      "total_pages": 1
-    }
+    "addresses": [ /* ChildAddressResponse[] */ ],
+    "total": 12,
+    "limit": 50,
+    "offset": 0
   }
 }
 ```
 
 ---
 
-## List All Addresses
-
-Get all addresses across all wallets for your organization.
+## List all addresses (org-wide)
 
 ```
 GET /api/v1/addresses
 ```
+**Auth:** Dual-auth.
 
-### Query Parameters
+### Query params
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `chain` | string | - | Filter by chain |
-| `network` | string | - | Filter by network |
-| `wallet_id` | string | - | Filter by wallet |
-| `is_active` | boolean | - | Filter by active status |
-| `search` | string | - | Search by label or address |
-| `page` | integer | 1 | Page number |
-| `limit` | integer | 20 | Items per page (max 100) |
-
-### Example Request
-
-```bash
-curl -X GET "https://apitest.hasapay.com/api/v1/addresses?chain=ethereum&search=Customer" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
-```
-
-### Example Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "addresses": [
-      {
-        "id": "660e8400-e29b-41d4-a716-446655440001",
-        "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-        "address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
-        "chain": "ethereum",
-        "network": "sepolia",
-        "label": "Customer-001",
-        "metadata": {
-          "customer_id": "cust_abc123"
-        },
-        "is_active": true,
-        "created_at": "2024-04-16T10:05:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 1,
-      "total_pages": 1
-    }
-  }
-}
-```
+| Param | Description |
+|---|---|
+| `chain` | Filter by chain |
+| `network` | Filter by network |
+| `include_balances` | Inline balances |
+| `limit` | Default 50 |
+| `offset` | Default 0 |
 
 ---
 
-## Get Address
-
-Get details of a specific address.
+## Get one address
 
 ```
-GET /api/v1/addresses/:id
+GET /api/v1/wallets/:walletId/addresses/:addressId
 ```
+**Auth:** Dual-auth.
 
-### Path Parameters
+> The flat `GET /addresses/:id` route does **not** exist — addresses are always nested under their parent wallet.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | string | Address ID (UUID) |
+### Query params
 
-### Example Request
-
-```bash
-curl -X GET https://apitest.hasapay.com/api/v1/addresses/660e8400-e29b-41d4-a716-446655440001 \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature"
-```
-
-### Example Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
-    "address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
-    "chain": "ethereum",
-    "network": "sepolia",
-    "label": "Customer-001",
-    "metadata": {
-      "customer_id": "cust_abc123",
-      "order_id": "order_xyz789"
-    },
-    "derivation_index": 1,
-    "is_active": true,
-    "total_received": "1500.00",
-    "total_received_usd": "1500.00",
-    "transaction_count": 3,
-    "created_at": "2024-04-16T10:05:00Z",
-    "updated_at": "2024-04-16T12:00:00Z"
-  }
-}
-```
+| Param | Default | Description |
+|---|---|---|
+| `include_balances` | `false` | Inline balances |
 
 ---
 
-## Update Address
-
-Update address properties.
+## Update address
 
 ```
-PUT /api/v1/addresses/:id
+PUT /api/v1/wallets/:walletId/addresses/:addressId
 ```
+**Auth:** HMAC-only.
 
-### Request Body
+### Request body
+
+| Field | Type | Description |
+|---|---|---|
+| `external_user_id` | string | New external ID |
+| `label` | string | New label |
+| `metadata` | object | New metadata (replaces existing) |
+
+---
+
+## Update auto-sweep config
+
+```
+PUT /api/v1/wallets/:walletId/addresses/:addressId/auto-sweep
+```
+**Auth:** HMAC-only.
+
+### Request body
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `label` | string | No | New label |
-| `metadata` | object | No | New metadata (replaces existing) |
-| `is_active` | boolean | No | Active status |
+|---|---|---|---|
+| `auto_sweep_enabled` | boolean | Yes | Enable / disable per-address auto sweep |
+| `sweep_threshold` | string | No | Per-address USD threshold; omit to clear and inherit |
 
-### Example Request
-
-```bash
-curl -X PUT https://apitest.hasapay.com/api/v1/addresses/660e8400-e29b-41d4-a716-446655440001 \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature" \
-  -d '{
-    "label": "VIP Customer-001",
-    "metadata": {
-      "customer_id": "cust_abc123",
-      "tier": "premium"
-    }
-  }'
-```
-
-### Example Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "label": "VIP Customer-001",
-    "metadata": {
-      "customer_id": "cust_abc123",
-      "tier": "premium"
-    },
-    "updated_at": "2024-04-16T12:30:00Z"
-  }
-}
-```
+For fuller sweep config (chain-level overrides, mode selection), see [Sweep](sweep.md).
 
 ---
 
-## Auto-Sweep Configuration
-
-Configure automatic sweeping of funds from child addresses to the master wallet.
+## Send from a child address
 
 ```
-PUT /api/v1/addresses/:id/auto-sweep
+POST /api/v1/wallets/:walletId/addresses/:addressId/send
 ```
+**Auth:** HMAC-only.
 
-### Request Body
+See [Transactions → Send from child address](transactions.md#send-from-a-child-address) for full details.
+
+---
+
+## Estimate gas for a child-address send
+
+```
+POST /api/v1/wallets/:walletId/addresses/:addressId/estimate-gas
+```
+**Auth:** HMAC-only.
+
+### Request body
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | boolean | Yes | Enable/disable auto-sweep |
-| `threshold` | string | No | Minimum amount to trigger sweep |
-| `asset_id` | string | No | Specific asset to sweep (default: all) |
-
-### Example Request
-
-```bash
-curl -X PUT https://apitest.hasapay.com/api/v1/addresses/660e8400-e29b-41d4-a716-446655440001/auto-sweep \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_signature" \
-  -d '{
-    "enabled": true,
-    "threshold": "100.00"
-  }'
-```
-
-### Example Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "auto_sweep_enabled": true,
-    "auto_sweep_threshold": "100.00",
-    "updated_at": "2024-04-16T12:35:00Z"
-  }
-}
-```
+|---|---|---|---|
+| `to_address` | string | Yes | Destination |
+| `amount` | string | Yes | Raw token units (e.g. `100000000` for 100 USDC) |
+| `asset_id` | string | No | Asset UUID; if omitted, estimates a native send |
 
 ---
 
 ## Errors
 
-| Code | Description |
-|------|-------------|
-| `ADDRESS_NOT_FOUND` | Address with specified ID doesn't exist |
-| `WALLET_NOT_FOUND` | Parent wallet doesn't exist |
-| `ADDRESS_LIMIT_REACHED` | Maximum address limit reached (testnet: 5 per wallet) |
-| `INVALID_METADATA` | Metadata exceeds size limit or contains invalid data |
+| Code | Cause |
+|---|---|
+| `ADDRESS_NOT_FOUND` | No address with that ID on this organization |
+| `WALLET_NOT_FOUND` | Parent wallet doesn't exist or doesn't belong to caller |
+| `ADDRESS_LIMIT_REACHED` | Per-wallet address cap reached (testnet has tighter limits) |
+| `INVALID_METADATA` | Metadata exceeds size limit |

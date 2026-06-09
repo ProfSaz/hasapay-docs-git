@@ -6,249 +6,228 @@ Get your first wallet created and receive a test deposit in under 5 minutes.
 
 ## Prerequisites
 
-- A HasaPay account ([Sign up here](https://dashboardtest.hasapay.com/register))
-- Your API Key and Secret Key (provided after email verification)
-- Basic knowledge of REST APIs
+- A HasaPay account ([sign up](https://dashboardtest.hasapay.com/register))
+- Your API key (`hpk_test_...`) and secret key (`hps_test_...`) from the dashboard's API Keys page
+- A REST client or shell with `curl`
 
 ---
 
-## Step 1: Sign Up and Verify Email
+## Step 1: Sign up and verify email
 
-1. Go to [dashboardtest.hasapay.com/register](https://dashboardtest.hasapay.com/register)
+1. Register at [dashboardtest.hasapay.com/register](https://dashboardtest.hasapay.com/register)
 2. Enter your organization name, email, and password
 3. Check your email for a 6-digit verification code
-4. Enter the code to verify your account
+4. Enter the code to verify
 
-After verification, you'll receive an email with:
-- Your **API Key** (starts with `hpk_`)
-- Your **Secret Key** (starts with `hps_`)
-
-> ⚠️ **Important:** Save your Secret Key securely. It's only shown once!
+After verification, head to the API Keys page in the dashboard and generate your first key. Save the **secret key** immediately — it's only shown once.
 
 ---
 
-## Step 2: Understand Authentication
+## Step 2: Pick an auth tier
 
-HasaPay uses two authentication methods:
+HasaPay has three auth tiers:
 
-| Method | Used For | Headers Required |
-|--------|----------|------------------|
-| **JWT** | Dashboard APIs, user management | `Authorization: Bearer <token>` |
-| **HMAC** | Wallet, transaction, address APIs | `X-API-Key`, `X-Timestamp`, `X-Signature` |
+| Tier | Headers | Use when |
+|---|---|---|
+| **JWT** | `Authorization: Bearer <token>` | Logged in via the dashboard, hitting user/org/team/api-key routes |
+| **HMAC** | `X-API-Key`, `X-Signature`, `X-Timestamp`, `X-Request-ID` | Server-to-server, hitting wallet/address writes or sends |
+| **Dual-auth** | Either of the above | Every read endpoint and most config writes |
 
-For this quick start, we'll use **HMAC authentication** to create wallets.
+For this quickstart we'll use **HMAC** to create a wallet (HMAC-only) and read it back (dual-auth).
+
+Full signing details in [Authentication](authentication.md).
 
 ---
 
-## Step 3: Generate HMAC Signature
+## Step 3: Generate an HMAC signature
 
-Every HMAC request requires a signature. Here's how to generate it:
+The signed payload is `{timestamp}:{requestId}:{body}` — colon-joined, no method/path.
 
-### Node.js Example
+### Node.js
 
 ```javascript
 const crypto = require('crypto');
+const { randomUUID } = require('crypto');
 
-function generateSignature(method, path, timestamp, body, secretKey) {
-  // Create the string to sign
+function signRequest(secretKey, body) {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const requestId = randomUUID();
   const bodyString = body ? JSON.stringify(body) : '';
-  const stringToSign = `${method}\n${path}\n${timestamp}\n${bodyString}`;
-  
-  // Generate HMAC-SHA256 signature
+  const payload = `${timestamp}:${requestId}:${bodyString}`;
   const signature = crypto
     .createHmac('sha256', secretKey)
-    .update(stringToSign)
+    .update(payload)
     .digest('hex');
-  
-  return signature;
+  return { timestamp, requestId, signature, bodyString };
 }
-
-// Example usage
-const method = 'POST';
-const path = '/api/v1/wallets';
-const timestamp = Math.floor(Date.now() / 1000).toString();
-const body = { chain: 'ethereum', network: 'sepolia', label: 'My Wallet' };
-const secretKey = 'hps_your_secret_key';
-
-const signature = generateSignature(method, path, timestamp, body, secretKey);
-console.log(signature);
 ```
 
-### Python Example
+### Python
 
 ```python
 import hmac
 import hashlib
 import json
 import time
+import uuid
 
-def generate_signature(method, path, timestamp, body, secret_key):
+def sign_request(secret_key, body):
+    timestamp = str(int(time.time()))
+    request_id = str(uuid.uuid4())
     body_string = json.dumps(body, separators=(',', ':')) if body else ''
-    string_to_sign = f"{method}\n{path}\n{timestamp}\n{body_string}"
-    
+    payload = f'{timestamp}:{request_id}:{body_string}'
     signature = hmac.new(
         secret_key.encode(),
-        string_to_sign.encode(),
-        hashlib.sha256
+        payload.encode(),
+        hashlib.sha256,
     ).hexdigest()
-    
-    return signature
-
-# Example usage
-method = 'POST'
-path = '/api/v1/wallets'
-timestamp = str(int(time.time()))
-body = {'chain': 'ethereum', 'network': 'sepolia', 'label': 'My Wallet'}
-secret_key = 'hps_your_secret_key'
-
-signature = generate_signature(method, path, timestamp, body, secret_key)
-print(signature)
+    return timestamp, request_id, signature, body_string
 ```
+
+> Sign the bytes you send. If you serialize JSON for the signature and let your HTTP library re-serialize differently, the signatures won't match.
 
 ---
 
-## Step 4: Create Your First Wallet
-
-Now let's create an Ethereum testnet wallet:
-
-### Request
+## Step 4: Create your first master wallet
 
 ```bash
+BODY='{"chain":"ethereum","network":"sepolia","label":"My First Wallet"}'
+TS=$(date +%s)
+RID=$(uuidgen)
+SIG=$(echo -n "$TS:$RID:$BODY" | openssl dgst -sha256 -hmac "$SECRET_KEY" | cut -d' ' -f2)
+
 curl -X POST https://apitest.hasapay.com/api/v1/wallets \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_generated_signature" \
-  -d '{
-    "chain": "ethereum",
-    "network": "sepolia",
-    "label": "My First Wallet"
-  }'
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Signature: $SIG" \
+  -H "X-Timestamp: $TS" \
+  -H "X-Request-ID: $RID" \
+  -d "$BODY"
 ```
 
 ### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "uuid",
     "chain": "ethereum",
     "network": "sepolia",
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+    "address": "0xd502b72b8D969D60D1094174b1457C73671eb9d8",
     "label": "My First Wallet",
     "is_active": true,
-    "created_at": "2024-04-16T10:00:00Z"
+    "child_count": 0,
+    "created_at": "2026-06-09T10:00:00Z"
   }
 }
 ```
 
-🎉 **Congratulations!** You've created your first wallet.
+🎉 You have a master wallet. Save the `id` — you'll need it for the next step.
 
 ---
 
-## Step 5: Generate a Deposit Address
+## Step 5: Generate a deposit address
 
-Create a child address to receive deposits:
-
-### Request
+> **Path note:** create is `/address` (singular). Listing is `/addresses` (plural).
 
 ```bash
-curl -X POST https://apitest.hasapay.com/api/v1/wallets/{wallet_id}/addresses \
+WALLET_ID="<from step 4>"
+BODY='{"external_user_id":"cust_123","label":"Customer-001","metadata":{"order_id":"order_456"}}'
+TS=$(date +%s)
+RID=$(uuidgen)
+SIG=$(echo -n "$TS:$RID:$BODY" | openssl dgst -sha256 -hmac "$SECRET_KEY" | cut -d' ' -f2)
+
+curl -X POST "https://apitest.hasapay.com/api/v1/wallets/$WALLET_ID/address" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: hpk_your_api_key" \
-  -H "X-Timestamp: 1713260400" \
-  -H "X-Signature: your_generated_signature" \
-  -d '{
-    "label": "Customer-001",
-    "metadata": {
-      "customer_id": "cust_123",
-      "order_id": "order_456"
-    }
-  }'
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Signature: $SIG" \
+  -H "X-Timestamp: $TS" \
+  -H "X-Request-ID: $RID" \
+  -d "$BODY"
 ```
 
 ### Response
 
 ```json
 {
-  "success": true,
   "data": {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "wallet_id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "uuid",
+    "master_wallet_id": "uuid",
     "address": "0x8ba1f109551bD432803012645Ac136ddd64DBA72",
-    "label": "Customer-001",
-    "metadata": {
-      "customer_id": "cust_123",
-      "order_id": "order_456"
-    },
-    "created_at": "2024-04-16T10:05:00Z"
+    "chain": "ethereum",
+    "network": "sepolia",
+    "external_user_id": "cust_123",
+    "metadata": {"order_id": "order_456"},
+    "derivation_index": 1,
+    "is_active": true,
+    "auto_sweep_enabled": true,
+    "created_at": "2026-06-09T10:05:00Z"
   }
 }
 ```
 
----
-
-## Step 6: Get Test Tokens
-
-For testnet, you can get free test tokens from faucets:
-
-| Chain | Faucet URL |
-|-------|-----------|
-| Ethereum Sepolia | [sepoliafaucet.com](https://sepoliafaucet.com) |
-| Polygon Amoy | [faucet.polygon.technology](https://faucet.polygon.technology) |
-| Tron Shasta | [shasta.tronex.io](https://shasta.tronex.io) |
-| Base Sepolia | [faucet.base.org](https://faucet.base.org) |
-
-Send test tokens to your generated deposit address and watch them appear in your dashboard!
+The `external_user_id` and `metadata` will surface on every webhook for transactions to this address.
 
 ---
 
-## Step 7: Set Up Webhooks (Optional)
+## Step 6: Get test tokens and send some in
 
-Get notified when deposits arrive:
+For testnet, free faucets:
 
-### Request
+| Chain | Faucet |
+|---|---|
+| Ethereum Sepolia | https://sepoliafaucet.com |
+| Polygon Amoy | https://faucet.polygon.technology |
+| Base Sepolia | https://faucet.base.org |
+| BSC Testnet | https://testnet.bnbchain.org/faucet-smart |
+| Tron Shasta | https://www.trongrid.io/faucet |
+
+Send a small amount of native token (and any test stablecoin you've enabled via `POST /assets/enable`) to your child address. Within a couple of blocks you'll see the deposit appear in the dashboard, and a `deposit.pending` → `deposit.confirmed` webhook if you've subscribed.
+
+---
+
+## Step 7: Set up a webhook (optional)
 
 ```bash
 curl -X POST https://apitest.hasapay.com/api/v1/webhooks \
+  -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "url": "https://your-server.com/webhook",
-    "events": ["deposit.confirmed", "withdrawal.completed"],
-    "is_active": true
+    "url": "https://your-server.com/webhooks/hasapay",
+    "events": ["deposit.confirmed", "withdrawal.completed", "withdrawal.failed"]
   }'
 ```
 
+The webhook endpoint accepts **dual-auth**, so JWT works fine. Use your **organization's webhook secret** to verify `X-HasaPay-Signature` on incoming deliveries — see [Webhooks](../api-reference/webhooks.md).
+
 ---
 
-## Next Steps
+## Next steps
 
-Now that you have the basics working:
-
-1. **[Learn about Authentication](authentication.md)** - Deep dive into JWT and HMAC
-2. **[Explore the API Reference](../api-reference/overview.md)** - See all available endpoints
-3. **[Set up Webhooks](webhooks.md)** - Real-time notifications for deposits
-4. **[View Transactions](../api-reference/transactions.md)** - Monitor all wallet activity
+- [Authentication](authentication.md) — full HMAC/JWT/dual-auth reference
+- [API Reference Overview](../api-reference/overview.md) — every endpoint
+- [Webhooks](../api-reference/webhooks.md) — payload shapes, signature verification, retries
+- [Transactions](../api-reference/transactions.md) — sending and monitoring
 
 ---
 
 ## Troubleshooting
 
-### "Invalid signature" error
+### `401 invalid_signature`
 
-- Check that your timestamp is within 5 minutes of server time
-- Ensure you're using the correct HTTP method in the signature
-- Verify the path starts with `/api/v1/`
-- Make sure the body JSON has no extra whitespace
+- Sign the **exact** body bytes you send on the wire — no whitespace drift between signing and sending
+- Use Unix **seconds**, not milliseconds, for `X-Timestamp`
+- The signed payload is `{timestamp}:{requestId}:{body}`, **not** `METHOD\nPATH\nTIMESTAMP\nBODY`
 
-### "Unauthorized" error
+### `401 timestamp_expired`
 
-- Verify your API Key is correct
-- Check that your account is verified
-- Ensure you're using the right authentication method (JWT vs HMAC)
+- System clock is drifting; sync it
+- Don't cache a timestamp — mint it at request time
+
+### `409 duplicate_request`
+
+- You reused an `X-Request-ID`. Mint a fresh UUID per request, including retries
 
 ### Still stuck?
 
-Contact us at support@hasapay.com or join our Discord community.
+support@hasapay.com
